@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-brand: #4f46e5;
+  --color-brand-hover: #4338ca;
+  --color-secondary: #64748b;
+  --color-success: #16a34a;
+  --color-error: #dc2626;
+}
+
+@layer components {
+  .campo-label {
+    @apply text-sm font-medium text-slate-700 dark:text-slate-200;
+  }
+
+  .campo-input {
+    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 focus:border-brand focus:ring-2 focus:ring-brand/20 focus:outline-none;
+  }
+
+  .campo-input-error {
+    @apply border-error focus:border-error focus:ring-error/20;
+  }
+}

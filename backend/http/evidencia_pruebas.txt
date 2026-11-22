@@ -1,0 +1,376 @@
+EVIDENCIA DE PRUEBAS - TPI Food Store (backend)
+Fecha: 22/11/2026 15:44
+Entorno: Python 3.13.2, PostgreSQL 17.11, base nueva + python -m app.db.seed
+Ejecución: auth.http, catalogo.http y pedidos.http en ese orden, con un cliente que guarda la cookie como REST Client;
+se compara el status obtenido con el esperado (entre paréntesis en el título).
+
+SEED: Seed OK · creados: 2 usuarios, 5 categorías, 14 productos (los existentes se conservan)
+
+================================================================================
+http/auth.http
+================================================================================
+[OK ] 201 1. Registro público: crea un usuario con rol user (201)
+        POST http://localhost:8000/api/v1/auth/register
+        → {"id": 3, "username": "ana107228", "full_name": "Ana García", "email": "ana501349@example.com", "role": "user", "disabled": false, "created_at": "2026-11-22T15:44:13.811611-03:00"}
+[OK ] 409 2. Error: username ya registrado (409)
+        POST http://localhost:8000/api/v1/auth/register
+        → {"detail": "El username ya está registrado"}
+[OK ] 409 3. Error: email ya registrado (409)
+        POST http://localhost:8000/api/v1/auth/register
+        → {"detail": "El email ya está registrado"}
+[OK ] 422 4. Error: email inválido y password de menos de 8 caracteres (422)
+        POST http://localhost:8000/api/v1/auth/register
+        → {"detail": [{"type": "value_error", "loc": ["body", "email"], "msg": "value is not a valid email address: An email address must have an @-sign.", "input": "no-es-un-email", "ctx": {"reason": "An email address must have an @-sign."}}, {"type": "string_too_short", "loc": ["body", "password"], "msg": "…
+[OK ] 401 5. Login con contraseña incorrecta (401)
+        POST http://localhost:8000/api/v1/auth/token
+        → {"detail": "Usuario o contraseña incorrectos"}
+[OK ] 401 6. Login con usuario inexistente (401)
+        POST http://localhost:8000/api/v1/auth/token
+        → {"detail": "Usuario o contraseña incorrectos"}
+[OK ] 401 7. /me sin cookie (401)
+        GET http://localhost:8000/api/v1/auth/me
+        → {"detail": "No autenticado"}
+[OK ] 200 8. Login del cliente: el JWT llega en la cookie HttpOnly, no en el cuerpo (200)
+        POST http://localhost:8000/api/v1/auth/token
+        → {"message": "Login exitoso"}
+[OK ] 200 9. Perfil del cliente: rol user, sin hashed_password (200)
+        GET http://localhost:8000/api/v1/auth/me
+        → {"id": 2, "username": "cliente", "full_name": "Cliente de Prueba", "email": "cliente@foodstore.com", "role": "user", "disabled": false, "created_at": "2026-11-22T15:44:10.133475-03:00"}
+[OK ] 403 10. Un user no puede listar usuarios (403)
+        GET http://localhost:8000/api/v1/admin/usuarios
+        → {"detail": "Permisos insuficientes: se requiere el rol admin"}
+[OK ] 200 11. Login del admin (200)
+        POST http://localhost:8000/api/v1/auth/token
+        → {"message": "Login exitoso"}
+[OK ] 200 12. Perfil del admin (200)
+        GET http://localhost:8000/api/v1/auth/me
+        → {"id": 1, "username": "admin", "full_name": "Administrador Food Store", "email": "admin@foodstore.com", "role": "admin", "disabled": false, "created_at": "2026-11-22T15:44:09.770557-03:00"}
+[OK ] 200 13. Listado de usuarios, incluidos los desactivados (200)
+        GET http://localhost:8000/api/v1/admin/usuarios
+        → [{"id": 1, "username": "admin", "full_name": "Administrador Food Store", "email": "admin@foodstore.com", "role": "admin", "disabled": false, "created_at": "2026-11-22T15:44:09.770557-03:00"}, {"id": 2, "username": "cliente", "full_name": "Cliente de Prueba", "email": "cliente@foodstore.com", "role":…
+[OK ] 200 14. Desactivar al usuario registrado en 1 (200)
+        POST http://localhost:8000/api/v1/admin/usuarios/3/desactivar
+        → {"id": 3, "username": "ana107228", "full_name": "Ana García", "email": "ana501349@example.com", "role": "user", "disabled": true, "created_at": "2026-11-22T15:44:13.811611-03:00"}
+[OK ] 200 15. Desactivar de nuevo: idempotente (200)
+        POST http://localhost:8000/api/v1/admin/usuarios/3/desactivar
+        → {"id": 3, "username": "ana107228", "full_name": "Ana García", "email": "ana501349@example.com", "role": "user", "disabled": true, "created_at": "2026-11-22T15:44:13.811611-03:00"}
+[OK ] 400 16. Login de una cuenta desactivada (400)
+        POST http://localhost:8000/api/v1/auth/token
+        → {"detail": "Cuenta de usuario desactivada"}
+[OK ] 400 17. El admin no puede desactivarse a sí mismo (400)
+        POST http://localhost:8000/api/v1/admin/usuarios/1/desactivar
+        → {"detail": "Un administrador no puede desactivarse a sí mismo"}
+[OK ] 404 18. Desactivar un usuario inexistente (404)
+        POST http://localhost:8000/api/v1/admin/usuarios/99999/desactivar
+        → {"detail": "No existe un usuario con id 99999"}
+[OK ] 404 19. Activar un usuario inexistente (404)
+        POST http://localhost:8000/api/v1/admin/usuarios/99999/activar
+        → {"detail": "No existe un usuario con id 99999"}
+[OK ] 200 20. Activar al usuario registrado (200)
+        POST http://localhost:8000/api/v1/admin/usuarios/3/activar
+        → {"id": 3, "username": "ana107228", "full_name": "Ana García", "email": "ana501349@example.com", "role": "user", "disabled": false, "created_at": "2026-11-22T15:44:13.811611-03:00"}
+[OK ] 200 21. Activar de nuevo: idempotente (200)
+        POST http://localhost:8000/api/v1/admin/usuarios/3/activar
+        → {"id": 3, "username": "ana107228", "full_name": "Ana García", "email": "ana501349@example.com", "role": "user", "disabled": false, "created_at": "2026-11-22T15:44:13.811611-03:00"}
+[OK ] 200 22. Login del usuario reactivado (200)
+        POST http://localhost:8000/api/v1/auth/token
+        → {"message": "Login exitoso"}
+[OK ] 200 23. Logout: la respuesta borra la cookie (200)
+        POST http://localhost:8000/api/v1/auth/logout
+        → {"message": "Sesión cerrada"}
+[OK ] 401 24. Después del logout, /me responde 401 (401)
+        GET http://localhost:8000/api/v1/auth/me
+        → {"detail": "No autenticado"}
+[OK ] 401 25. Token adulterado en la cookie (401)
+        GET http://localhost:8000/api/v1/auth/me
+        → {"detail": "Credenciales inválidas o sesión vencida"}
+================================================================================
+http/catalogo.http
+================================================================================
+[OK ] 200 1. Login del admin (200)
+        POST http://localhost:8000/api/v1/auth/token
+        → {"message": "Login exitoso"}
+[OK ] 200 2. Listado público de categorías activas (200)
+        GET http://localhost:8000/api/v1/categorias
+        → [{"id": 3, "nombre": "Acompañamientos", "descripcion": "Papas, empanadas y otros para compartir", "activo": true}, {"id": 4, "nombre": "Bebidas", "descripcion": "Gaseosas, limonadas y cervezas", "activo": true}, {"id": 1, "nombre": "Hamburguesas", "descripcion": "Hamburguesas caseras con pan de papa…
+[OK ] 201 3. Crear categoría (201)
+        POST http://localhost:8000/api/v1/categorias
+        → {"id": 6, "nombre": "Ensaladas 81310", "descripcion": "Frescas y de estación", "activo": true}
+[OK ] 409 4. Error: nombre duplicado, sin distinguir mayúsculas (409)
+        POST http://localhost:8000/api/v1/categorias
+        → {"detail": "Ya existe una categoría llamada 'pizzas'"}
+[OK ] 422 5. Error: nombre de 1 carácter (422)
+        POST http://localhost:8000/api/v1/categorias
+        → {"detail": [{"type": "string_too_short", "loc": ["body", "nombre"], "msg": "String should have at least 2 characters", "input": "A", "ctx": {"min_length": 2}}]}
+[OK ] 200 6. Detalle de la categoría creada (200)
+        GET http://localhost:8000/api/v1/categorias/6
+        → {"id": 6, "nombre": "Ensaladas 81310", "descripcion": "Frescas y de estación", "activo": true}
+[OK ] 200 7. PUT parcial: solo la descripción, el nombre se conserva (200)
+        PUT http://localhost:8000/api/v1/categorias/6
+        → {"id": 6, "nombre": "Ensaladas 81310", "descripcion": "Descripción actualizada", "activo": true}
+[OK ] 409 8. Error: PUT con el nombre de otra categoría (409)
+        PUT http://localhost:8000/api/v1/categorias/6
+        → {"detail": "Ya existe una categoría llamada 'Bebidas'"}
+[OK ] 404 9. Error: PUT de una categoría inexistente (404)
+        PUT http://localhost:8000/api/v1/categorias/99999
+        → {"detail": "No existe una categoría con id 99999"}
+[OK ] 204 10. Baja lógica de la categoría (204)
+        DELETE http://localhost:8000/api/v1/categorias/6
+        → null
+[OK ] 404 11. La categoría dada de baja se trata como inexistente: detalle (404)
+        GET http://localhost:8000/api/v1/categorias/6
+        → {"detail": "No existe una categoría con id 6"}
+[OK ] 404 12. La categoría dada de baja: PUT (404)
+        PUT http://localhost:8000/api/v1/categorias/6
+        → {"detail": "No existe una categoría con id 6"}
+[OK ] 404 13. La categoría dada de baja: DELETE (404)
+        DELETE http://localhost:8000/api/v1/categorias/6
+        → {"detail": "No existe una categoría con id 6"}
+[OK ] 409 14. La baja no libera el nombre único (409)
+        POST http://localhost:8000/api/v1/categorias
+        → {"detail": "Ya existe una categoría llamada 'Ensaladas 81310'"}
+[OK ] 401 15. Crear categoría sin sesión (401)
+        POST http://localhost:8000/api/v1/categorias
+        → {"detail": "No autenticado"}
+[OK ] 200 16. Listado público paginado: {total, items}, limit 20 por defecto (200)
+        GET http://localhost:8000/api/v1/productos
+        → {"total": 14, "items": [{"id": 13, "nombre": "Brownie con nueces", "descripcion": "Con salsa de chocolate", "precio_base": 3900.0, "imagen_url": "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=600&auto=format&fit=crop", "stock": 14, "disponible": true, "activo": true, "categoria_id":…
+[OK ] 200 17. Paginación: segunda página de 5 (200)
+        GET http://localhost:8000/api/v1/productos?skip=5&limit=5
+        → {"total": 14, "items": [{"id": 1, "nombre": "Hamburguesa clásica", "descripcion": "Medallón de carne, lechuga, tomate y cheddar", "precio_base": 8500.0, "imagen_url": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&auto=format&fit=crop", "stock": 25, "disponible": true, "activo":…
+[OK ] 200 18. Búsqueda por nombre sin distinguir mayúsculas (200)
+        GET http://localhost:8000/api/v1/productos?search=PIZZA
+        → {"total": 3, "items": [{"id": 5, "nombre": "Pizza margherita", "descripcion": "Tomate, muzzarella fresca y albahaca", "precio_base": 10500.0, "imagen_url": "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=600&auto=format&fit=crop", "stock": 12, "disponible": true, "activo": true, "cat…
+[OK ] 200 19. Filtro por categoría y disponibilidad (200)
+        GET http://localhost:8000/api/v1/productos?categoria_id=1&disponible=true
+        → {"total": 3, "items": [{"id": 1, "nombre": "Hamburguesa clásica", "descripcion": "Medallón de carne, lechuga, tomate y cheddar", "precio_base": 8500.0, "imagen_url": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&auto=format&fit=crop", "stock": 25, "disponible": true, "activo": …
+[OK ] 422 20. Error: limit mayor que 100 (422)
+        GET http://localhost:8000/api/v1/productos?limit=101
+        → {"detail": [{"type": "less_than_equal", "loc": ["query", "limit"], "msg": "Input should be less than or equal to 100", "input": "101", "ctx": {"le": 100}}]}
+[OK ] 200 21. Detalle de producto con su categoría (200)
+        GET http://localhost:8000/api/v1/productos/1
+        → {"id": 1, "nombre": "Hamburguesa clásica", "descripcion": "Medallón de carne, lechuga, tomate y cheddar", "precio_base": 8500.0, "imagen_url": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&auto=format&fit=crop", "stock": 25, "disponible": true, "activo": true, "categoria_id": 1…
+[OK ] 404 22. Detalle de producto inexistente (404)
+        GET http://localhost:8000/api/v1/productos/99999
+        → {"detail": "No existe un producto con id 99999"}
+[OK ] 201 23. Crear producto (201)
+        POST http://localhost:8000/api/v1/productos
+        → {"id": 15, "nombre": "Lomito completo", "descripcion": "Lomo, jamón, queso, huevo y lechuga", "precio_base": 12500.0, "imagen_url": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600", "stock": 10, "disponible": true, "activo": true, "categoria_id": 1, "categoria": {"id": 1, "nombre…
+[OK ] 404 24. Error: categoría inexistente (404)
+        POST http://localhost:8000/api/v1/productos
+        → {"detail": "No existe una categoría con id 99999"}
+[OK ] 404 25. Error: categoría dada de baja (404)
+        POST http://localhost:8000/api/v1/productos
+        → {"detail": "No existe una categoría con id 6"}
+[OK ] 422 26. Error: precio y stock negativos (422)
+        POST http://localhost:8000/api/v1/productos
+        → {"detail": [{"type": "greater_than_equal", "loc": ["body", "precio_base"], "msg": "Input should be greater than or equal to 0", "input": -1, "ctx": {"ge": 0.0}}, {"type": "greater_than_equal", "loc": ["body", "stock"], "msg": "Input should be greater than or equal to 0", "input": -5, "ctx": {"ge": 0…
+[OK ] 200 27. PUT parcial: solo el precio (200)
+        PUT http://localhost:8000/api/v1/productos/15
+        → {"id": 15, "nombre": "Lomito completo", "descripcion": "Lomo, jamón, queso, huevo y lechuga", "precio_base": 13000.0, "imagen_url": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600", "stock": 10, "disponible": true, "activo": true, "categoria_id": 1, "categoria": {"id": 1, "nombre…
+[OK ] 404 28. Error: PUT con una categoría inexistente (404)
+        PUT http://localhost:8000/api/v1/productos/15
+        → {"detail": "No existe una categoría con id 99999"}
+[OK ] 200 29. PATCH de stock y disponibilidad (200)
+        PATCH http://localhost:8000/api/v1/productos/15/stock
+        → {"id": 15, "nombre": "Lomito completo", "descripcion": "Lomo, jamón, queso, huevo y lechuga", "precio_base": 13000.0, "imagen_url": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600", "stock": 50, "disponible": false, "activo": true, "categoria_id": 1, "categoria": {"id": 1, "nombr…
+[OK ] 422 30. Error: PATCH con stock negativo (422)
+        PATCH http://localhost:8000/api/v1/productos/15/stock
+        → {"detail": [{"type": "greater_than_equal", "loc": ["body", "stock"], "msg": "Input should be greater than or equal to 0", "input": -1, "ctx": {"ge": 0}}]}
+[OK ] 200 31. Filtro disponible=false: aparece el producto pausado (200)
+        GET http://localhost:8000/api/v1/productos?disponible=false
+        → {"total": 1, "items": [{"id": 15, "nombre": "Lomito completo", "descripcion": "Lomo, jamón, queso, huevo y lechuga", "precio_base": 13000.0, "imagen_url": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600", "stock": 50, "disponible": false, "activo": true, "categoria_id": 1, "categ…
+[OK ] 204 32. Baja lógica del producto (204)
+        DELETE http://localhost:8000/api/v1/productos/15
+        → null
+[OK ] 404 33. Producto dado de baja: detalle (404)
+        GET http://localhost:8000/api/v1/productos/15
+        → {"detail": "No existe un producto con id 15"}
+[OK ] 404 34. Producto dado de baja: PUT (404)
+        PUT http://localhost:8000/api/v1/productos/15
+        → {"detail": "No existe un producto con id 15"}
+[OK ] 404 35. Producto dado de baja: PATCH de stock (404)
+        PATCH http://localhost:8000/api/v1/productos/15/stock
+        → {"detail": "No existe un producto con id 15"}
+[OK ] 404 36. Producto dado de baja: DELETE (404)
+        DELETE http://localhost:8000/api/v1/productos/15
+        → {"detail": "No existe un producto con id 15"}
+[OK ] 200 37. Login del cliente (200)
+        POST http://localhost:8000/api/v1/auth/token
+        → {"message": "Login exitoso"}
+[OK ] 403 38. Un user no puede crear productos (403)
+        POST http://localhost:8000/api/v1/productos
+        → {"detail": "Permisos insuficientes: se requiere el rol admin"}
+[OK ] 403 39. Un user no puede borrar categorías (403)
+        DELETE http://localhost:8000/api/v1/categorias/1
+        → {"detail": "Permisos insuficientes: se requiere el rol admin"}
+[OK ] 200 40. Logout (200)
+        POST http://localhost:8000/api/v1/auth/logout
+        → {"message": "Sesión cerrada"}
+================================================================================
+http/pedidos.http
+================================================================================
+[OK ] 200 1. Login del admin (200)
+        POST http://localhost:8000/api/v1/auth/token
+        → {"message": "Login exitoso"}
+[OK ] 201 2. Producto A: stock 10, precio 1000 (201)
+        POST http://localhost:8000/api/v1/productos
+        → {"id": 16, "nombre": "Prueba A 123834", "descripcion": null, "precio_base": 1000.0, "imagen_url": null, "stock": 10, "disponible": true, "activo": true, "categoria_id": 1, "categoria": {"id": 1, "nombre": "Hamburguesas", "descripcion": "Hamburguesas caseras con pan de papa", "activo": true}}
+[OK ] 201 3. Producto B: stock 2, precio 2500 (201)
+        POST http://localhost:8000/api/v1/productos
+        → {"id": 17, "nombre": "Prueba B 903856", "descripcion": null, "precio_base": 2500.0, "imagen_url": null, "stock": 2, "disponible": true, "activo": true, "categoria_id": 1, "categoria": {"id": 1, "nombre": "Hamburguesas", "descripcion": "Hamburguesas caseras con pan de papa", "activo": true}}
+[OK ] 201 4. Producto C: no disponible (201)
+        POST http://localhost:8000/api/v1/productos
+        → {"id": 18, "nombre": "Prueba C 473299", "descripcion": null, "precio_base": 500.0, "imagen_url": null, "stock": 5, "disponible": false, "activo": true, "categoria_id": 1, "categoria": {"id": 1, "nombre": "Hamburguesas", "descripcion": "Hamburguesas caseras con pan de papa", "activo": true}}
+[OK ] 201 5. Producto D (201)
+        POST http://localhost:8000/api/v1/productos
+        → {"id": 19, "nombre": "Prueba D 912208", "descripcion": null, "precio_base": 500.0, "imagen_url": null, "stock": 5, "disponible": true, "activo": true, "categoria_id": 1, "categoria": {"id": 1, "nombre": "Hamburguesas", "descripcion": "Hamburguesas caseras con pan de papa", "activo": true}}
+[OK ] 204 6. Baja lógica del producto D (204)
+        DELETE http://localhost:8000/api/v1/productos/19
+        → null
+[OK ] 200 7. Login del cliente (200)
+        POST http://localhost:8000/api/v1/auth/token
+        → {"message": "Login exitoso"}
+[OK ] 201 8. Pedido A x3 + B x1: PENDIENTE, copia nombre y precio, total 5500 (201)
+        POST http://localhost:8000/api/v1/pedidos
+        → {"id": 1, "usuario_id": 2, "estado": "PENDIENTE", "forma_pago": "EFECTIVO", "direccion_entrega": "San Martín 1234, Mendoza", "notas": "Tocar timbre", "total": 5500.0, "created_at": "2026-11-22T15:44:17.280347-03:00", "updated_at": "2026-11-22T15:44:17.280357-03:00", "items": [{"producto_id": 16, "no…
+[OK ] 200 9. [STOCK] A bajó de 10 a 7 (200)
+        GET http://localhost:8000/api/v1/productos/16
+        → {"id": 16, "nombre": "Prueba A 123834", "descripcion": null, "precio_base": 1000.0, "imagen_url": null, "stock": 7, "disponible": true, "activo": true, "categoria_id": 1, "categoria": {"id": 1, "nombre": "Hamburguesas", "descripcion": "Hamburguesas caseras con pan de papa", "activo": true}}
+[OK ] 400 10. Error: producto repetido entre los ítems (400)
+        POST http://localhost:8000/api/v1/pedidos
+        → {"detail": "Productos repetidos en el pedido: [16]"}
+[OK ] 400 11. Error: A x1 OK pero B x5 sin stock → rollback de TODO el pedido (400)
+        POST http://localhost:8000/api/v1/pedidos
+        → {"detail": "Stock insuficiente para 'Prueba B 903856': disponible 1, pedido 5"}
+[OK ] 200 12. [STOCK] A sigue en 7: el descuento del ítem anterior no se persistió (200)
+        GET http://localhost:8000/api/v1/productos/16
+        → {"id": 16, "nombre": "Prueba A 123834", "descripcion": null, "precio_base": 1000.0, "imagen_url": null, "stock": 7, "disponible": true, "activo": true, "categoria_id": 1, "categoria": {"id": 1, "nombre": "Hamburguesas", "descripcion": "Hamburguesas caseras con pan de papa", "activo": true}}
+[OK ] 400 13. Error: producto no disponible (400)
+        POST http://localhost:8000/api/v1/pedidos
+        → {"detail": "El producto 'Prueba C 473299' no está disponible"}
+[OK ] 404 14. Error: producto dado de baja (404)
+        POST http://localhost:8000/api/v1/pedidos
+        → {"detail": "No existe un producto con id 19"}
+[OK ] 404 15. Error: producto inexistente (404)
+        POST http://localhost:8000/api/v1/pedidos
+        → {"detail": "No existe un producto con id 99999"}
+[OK ] 422 16. RN-06 / schema: sin ítems (422)
+        POST http://localhost:8000/api/v1/pedidos
+        → {"detail": [{"type": "too_short", "loc": ["body", "items"], "msg": "List should have at least 1 item after validation, not 0", "input": [], "ctx": {"field_type": "List", "min_length": 1, "actual_length": 0}}]}
+[OK ] 422 17. RN-06: forma de pago inválida (422)
+        POST http://localhost:8000/api/v1/pedidos
+        → {"detail": [{"type": "enum", "loc": ["body", "forma_pago"], "msg": "Input should be 'EFECTIVO' or 'TRANSFERENCIA'", "input": "TARJETA", "ctx": {"expected": "'EFECTIVO' or 'TRANSFERENCIA'"}}]}
+[OK ] 422 18. RN-06: dirección de menos de 5 caracteres y cantidad 0 (422)
+        POST http://localhost:8000/api/v1/pedidos
+        → {"detail": [{"type": "greater_than_equal", "loc": ["body", "items", 0, "cantidad"], "msg": "Input should be greater than or equal to 1", "input": 0, "ctx": {"ge": 1}}, {"type": "string_too_short", "loc": ["body", "direccion_entrega"], "msg": "String should have at least 5 characters", "input": "abc"…
+[OK ] 401 19. Crear pedido sin sesión (401)
+        POST http://localhost:8000/api/v1/pedidos
+        → {"detail": "No autenticado"}
+[OK ] 200 20. Mis pedidos: {total, items}, solo los propios (200)
+        GET http://localhost:8000/api/v1/pedidos
+        → {"total": 1, "items": [{"id": 1, "usuario_id": 2, "estado": "PENDIENTE", "forma_pago": "EFECTIVO", "direccion_entrega": "San Martín 1234, Mendoza", "notas": "Tocar timbre", "total": 5500.0, "created_at": "2026-11-22T15:44:17.280347-03:00", "updated_at": "2026-11-22T15:44:17.280357-03:00", "items": […
+[OK ] 200 21. Mis pedidos filtrados por estado (200)
+        GET http://localhost:8000/api/v1/pedidos?estado=PENDIENTE&skip=0&limit=10
+        → {"total": 1, "items": [{"id": 1, "usuario_id": 2, "estado": "PENDIENTE", "forma_pago": "EFECTIVO", "direccion_entrega": "San Martín 1234, Mendoza", "notas": "Tocar timbre", "total": 5500.0, "created_at": "2026-11-22T15:44:17.280347-03:00", "updated_at": "2026-11-22T15:44:17.280357-03:00", "items": […
+[OK ] 200 22. Detalle de un pedido propio con sus líneas (200)
+        GET http://localhost:8000/api/v1/pedidos/1
+        → {"id": 1, "usuario_id": 2, "estado": "PENDIENTE", "forma_pago": "EFECTIVO", "direccion_entrega": "San Martín 1234, Mendoza", "notas": "Tocar timbre", "total": 5500.0, "created_at": "2026-11-22T15:44:17.280347-03:00", "updated_at": "2026-11-22T15:44:17.280357-03:00", "items": [{"producto_id": 16, "no…
+[OK ] 404 23. Pedido inexistente (404)
+        GET http://localhost:8000/api/v1/pedidos/99999
+        → {"detail": "No existe un pedido con id 99999"}
+[OK ] 403 24. Un user no ve el resumen (403)
+        GET http://localhost:8000/api/v1/pedidos/resumen
+        → {"detail": "Permisos insuficientes: se requiere el rol admin"}
+[OK ] 403 25. Un user no cambia estados (403)
+        PATCH http://localhost:8000/api/v1/pedidos/1/estado
+        → {"detail": "Permisos insuficientes: se requiere el rol admin"}
+[OK ] 201 26. Pedido A x2 para cancelar (201)
+        POST http://localhost:8000/api/v1/pedidos
+        → {"id": 6, "usuario_id": 2, "estado": "PENDIENTE", "forma_pago": "TRANSFERENCIA", "direccion_entrega": "Belgrano 450, Godoy Cruz", "notas": null, "total": 2000.0, "created_at": "2026-11-22T15:44:17.348019-03:00", "updated_at": "2026-11-22T15:44:17.348029-03:00", "items": [{"producto_id": 16, "nombre_…
+[OK ] 200 27. [STOCK] A bajó de 7 a 5 (200)
+        GET http://localhost:8000/api/v1/productos/16
+        → {"id": 16, "nombre": "Prueba A 123834", "descripcion": null, "precio_base": 1000.0, "imagen_url": null, "stock": 5, "disponible": true, "activo": true, "categoria_id": 1, "categoria": {"id": 1, "nombre": "Hamburguesas", "descripcion": "Hamburguesas caseras con pan de papa", "activo": true}}
+[OK ] 200 28. El dueño cancela su pedido PENDIENTE (200)
+        PATCH http://localhost:8000/api/v1/pedidos/6/cancelar
+        → {"id": 6, "usuario_id": 2, "estado": "CANCELADO", "forma_pago": "TRANSFERENCIA", "direccion_entrega": "Belgrano 450, Godoy Cruz", "notas": null, "total": 2000.0, "created_at": "2026-11-22T15:44:17.348019-03:00", "updated_at": "2026-11-22T15:44:17.357802-03:00", "items": [{"producto_id": 16, "nombre_…
+[OK ] 200 29. [STOCK] A volvió a 7: stock restituido en la misma transacción (200)
+        GET http://localhost:8000/api/v1/productos/16
+        → {"id": 16, "nombre": "Prueba A 123834", "descripcion": null, "precio_base": 1000.0, "imagen_url": null, "stock": 7, "disponible": true, "activo": true, "categoria_id": 1, "categoria": {"id": 1, "nombre": "Hamburguesas", "descripcion": "Hamburguesas caseras con pan de papa", "activo": true}}
+[OK ] 400 30. Error: cancelar un pedido que ya no está en PENDIENTE (400)
+        PATCH http://localhost:8000/api/v1/pedidos/6/cancelar
+        → {"detail": "Solo se puede cancelar un pedido PENDIENTE (estado actual: CANCELADO)"}
+[OK ] 404 31. Cancelar un pedido inexistente (404)
+        PATCH http://localhost:8000/api/v1/pedidos/99999/cancelar
+        → {"detail": "No existe un pedido con id 99999"}
+[OK ] 200 32. Login del admin (200)
+        POST http://localhost:8000/api/v1/auth/token
+        → {"message": "Login exitoso"}
+[OK ] 201 33. El admin también puede comprar: B x1 (201)
+        POST http://localhost:8000/api/v1/pedidos
+        → {"id": 7, "usuario_id": 1, "estado": "PENDIENTE", "forma_pago": "EFECTIVO", "direccion_entrega": "Oficina central 100", "notas": null, "total": 2500.0, "created_at": "2026-11-22T15:44:17.731270-03:00", "updated_at": "2026-11-22T15:44:17.731280-03:00", "items": [{"producto_id": 17, "nombre_producto":…
+[OK ] 200 34. [STOCK] B quedó en 0 (2 - 1 del pedido 1 - 1 de este) (200)
+        GET http://localhost:8000/api/v1/productos/17
+        → {"id": 17, "nombre": "Prueba B 903856", "descripcion": null, "precio_base": 2500.0, "imagen_url": null, "stock": 0, "disponible": true, "activo": true, "categoria_id": 1, "categoria": {"id": 1, "nombre": "Hamburguesas", "descripcion": "Hamburguesas caseras con pan de papa", "activo": true}}
+[OK ] 200 35. El admin ve todos los pedidos (200)
+        GET http://localhost:8000/api/v1/pedidos
+        → {"total": 3, "items": [{"id": 7, "usuario_id": 1, "estado": "PENDIENTE", "forma_pago": "EFECTIVO", "direccion_entrega": "Oficina central 100", "notas": null, "total": 2500.0, "created_at": "2026-11-22T15:44:17.731270-03:00", "updated_at": "2026-11-22T15:44:17.731280-03:00", "items": [{"producto_id":…
+[OK ] 200 36. El admin filtra por estado (200)
+        GET http://localhost:8000/api/v1/pedidos?estado=CANCELADO
+        → {"total": 1, "items": [{"id": 6, "usuario_id": 2, "estado": "CANCELADO", "forma_pago": "TRANSFERENCIA", "direccion_entrega": "Belgrano 450, Godoy Cruz", "notas": null, "total": 2000.0, "created_at": "2026-11-22T15:44:17.348019-03:00", "updated_at": "2026-11-22T15:44:17.357802-03:00", "items": [{"pro…
+[OK ] 200 37. El admin ve el detalle de un pedido ajeno (200)
+        GET http://localhost:8000/api/v1/pedidos/1
+        → {"id": 1, "usuario_id": 2, "estado": "PENDIENTE", "forma_pago": "EFECTIVO", "direccion_entrega": "San Martín 1234, Mendoza", "notas": "Tocar timbre", "total": 5500.0, "created_at": "2026-11-22T15:44:17.280347-03:00", "updated_at": "2026-11-22T15:44:17.280357-03:00", "items": [{"producto_id": 16, "no…
+[OK ] 403 38. /cancelar es solo del dueño: el admin con un pedido ajeno (403)
+        PATCH http://localhost:8000/api/v1/pedidos/1/cancelar
+        → {"detail": "Solo podés cancelar tus propios pedidos"}
+[OK ] 400 39. Transición inválida PENDIENTE → ENTREGADO (400)
+        PATCH http://localhost:8000/api/v1/pedidos/1/estado
+        → {"detail": "Transición inválida: PENDIENTE → ENTREGADO"}
+[OK ] 200 40. PENDIENTE → EN_PREPARACION (200)
+        PATCH http://localhost:8000/api/v1/pedidos/1/estado
+        → {"id": 1, "usuario_id": 2, "estado": "EN_PREPARACION", "forma_pago": "EFECTIVO", "direccion_entrega": "San Martín 1234, Mendoza", "notas": "Tocar timbre", "total": 5500.0, "created_at": "2026-11-22T15:44:17.280347-03:00", "updated_at": "2026-11-22T15:44:17.760832-03:00", "items": [{"producto_id": 16…
+[OK ] 400 41. Transición inválida EN_PREPARACION → PENDIENTE (400)
+        PATCH http://localhost:8000/api/v1/pedidos/1/estado
+        → {"detail": "Transición inválida: EN_PREPARACION → PENDIENTE"}
+[OK ] 422 42. Estado que no existe (422)
+        PATCH http://localhost:8000/api/v1/pedidos/1/estado
+        → {"detail": [{"type": "enum", "loc": ["body", "estado"], "msg": "Input should be 'PENDIENTE', 'EN_PREPARACION', 'ENTREGADO' or 'CANCELADO'", "input": "EN_CAMINO", "ctx": {"expected": "'PENDIENTE', 'EN_PREPARACION', 'ENTREGADO' or 'CANCELADO'"}}]}
+[OK ] 200 43. EN_PREPARACION → ENTREGADO (200)
+        PATCH http://localhost:8000/api/v1/pedidos/1/estado
+        → {"id": 1, "usuario_id": 2, "estado": "ENTREGADO", "forma_pago": "EFECTIVO", "direccion_entrega": "San Martín 1234, Mendoza", "notas": "Tocar timbre", "total": 5500.0, "created_at": "2026-11-22T15:44:17.280347-03:00", "updated_at": "2026-11-22T15:44:17.769994-03:00", "items": [{"producto_id": 16, "no…
+[OK ] 400 44. ENTREGADO es terminal: no se puede cancelar (400)
+        PATCH http://localhost:8000/api/v1/pedidos/1/estado
+        → {"detail": "Transición inválida: ENTREGADO → CANCELADO"}
+[OK ] 200 45. Pedido 3: PENDIENTE → EN_PREPARACION (200)
+        PATCH http://localhost:8000/api/v1/pedidos/7/estado
+        → {"id": 7, "usuario_id": 1, "estado": "EN_PREPARACION", "forma_pago": "EFECTIVO", "direccion_entrega": "Oficina central 100", "notas": null, "total": 2500.0, "created_at": "2026-11-22T15:44:17.731270-03:00", "updated_at": "2026-11-22T15:44:17.776966-03:00", "items": [{"producto_id": 17, "nombre_produ…
+[OK ] 200 46. El admin cancela desde EN_PREPARACION (200)
+        PATCH http://localhost:8000/api/v1/pedidos/7/estado
+        → {"id": 7, "usuario_id": 1, "estado": "CANCELADO", "forma_pago": "EFECTIVO", "direccion_entrega": "Oficina central 100", "notas": null, "total": 2500.0, "created_at": "2026-11-22T15:44:17.731270-03:00", "updated_at": "2026-11-22T15:44:17.781871-03:00", "items": [{"producto_id": 17, "nombre_producto":…
+[OK ] 200 47. [STOCK] B volvió a 1 (200)
+        GET http://localhost:8000/api/v1/productos/17
+        → {"id": 17, "nombre": "Prueba B 903856", "descripcion": null, "precio_base": 2500.0, "imagen_url": null, "stock": 1, "disponible": true, "activo": true, "categoria_id": 1, "categoria": {"id": 1, "nombre": "Hamburguesas", "descripcion": "Hamburguesas caseras con pan de papa", "activo": true}}
+[OK ] 400 48. CANCELADO es terminal (400)
+        PATCH http://localhost:8000/api/v1/pedidos/7/estado
+        → {"detail": "Transición inválida: CANCELADO → EN_PREPARACION"}
+[OK ] 404 49. Cambiar estado de un pedido inexistente (404)
+        PATCH http://localhost:8000/api/v1/pedidos/99999/estado
+        → {"detail": "No existe un pedido con id 99999"}
+[OK ] 200 50. Resumen del panel: conteos por estado, pedidos de hoy e ingresos de ENTREGADO (200)
+        GET http://localhost:8000/api/v1/pedidos/resumen
+        → {"pendientes": 0, "en_preparacion": 0, "entregados": 1, "cancelados": 2, "pedidos_hoy": 3, "ingresos_entregados": 5500.0}
+[OK ] 200 51. Login del cliente (200)
+        POST http://localhost:8000/api/v1/auth/token
+        → {"message": "Login exitoso"}
+[OK ] 403 52. El cliente no ve un pedido ajeno (403)
+        GET http://localhost:8000/api/v1/pedidos/7
+        → {"detail": "El pedido pertenece a otro usuario"}
+[OK ] 403 53. El cliente no cancela un pedido ajeno (403)
+        PATCH http://localhost:8000/api/v1/pedidos/7/cancelar
+        → {"detail": "Solo podés cancelar tus propios pedidos"}
+[OK ] 200 54. Logout (200)
+        POST http://localhost:8000/api/v1/auth/logout
+        → {"message": "Sesión cerrada"}
+
+TOTAL: 119 OK, 0 FALLAS

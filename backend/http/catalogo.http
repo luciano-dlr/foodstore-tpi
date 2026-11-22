@@ -1,0 +1,261 @@
+@baseUrl = http://localhost:8000/api/v1
+
+### ==========================================================
+### TPI Food Store · Catálogo: categorías y productos
+### Lecturas públicas (solo activos); escrituras solo admin.
+### Baja lógica con DELETE 204; un registro dado de baja responde 404.
+### ==========================================================
+
+### 1. Login del admin (200)
+POST {{baseUrl}}/auth/token
+Content-Type: application/x-www-form-urlencoded
+
+username=admin&password=Admin1234!
+
+
+### ---------------- CATEGORÍAS ----------------
+
+### 2. Listado público de categorías activas (200)
+# @no-cookie-jar
+GET {{baseUrl}}/categorias
+
+### 3. Crear categoría (201)
+# @name cat
+POST {{baseUrl}}/categorias
+Content-Type: application/json
+
+{
+  "nombre": "Ensaladas {{$randomInt 1000 999999}}",
+  "descripcion": "Frescas y de estación"
+}
+
+### 4. Error: nombre duplicado, sin distinguir mayúsculas (409)
+POST {{baseUrl}}/categorias
+Content-Type: application/json
+
+{
+  "nombre": "pizzas"
+}
+
+### 5. Error: nombre de 1 carácter (422)
+POST {{baseUrl}}/categorias
+Content-Type: application/json
+
+{
+  "nombre": "A"
+}
+
+### 6. Detalle de la categoría creada (200)
+GET {{baseUrl}}/categorias/{{cat.response.body.$.id}}
+
+### 7. PUT parcial: solo la descripción, el nombre se conserva (200)
+PUT {{baseUrl}}/categorias/{{cat.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "descripcion": "Descripción actualizada"
+}
+
+### 8. Error: PUT con el nombre de otra categoría (409)
+PUT {{baseUrl}}/categorias/{{cat.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "nombre": "Bebidas"
+}
+
+### 9. Error: PUT de una categoría inexistente (404)
+PUT {{baseUrl}}/categorias/99999
+Content-Type: application/json
+
+{
+  "descripcion": "x"
+}
+
+### 10. Baja lógica de la categoría (204)
+DELETE {{baseUrl}}/categorias/{{cat.response.body.$.id}}
+
+### 11. La categoría dada de baja se trata como inexistente: detalle (404)
+GET {{baseUrl}}/categorias/{{cat.response.body.$.id}}
+
+### 12. La categoría dada de baja: PUT (404)
+PUT {{baseUrl}}/categorias/{{cat.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "descripcion": "x"
+}
+
+### 13. La categoría dada de baja: DELETE (404)
+DELETE {{baseUrl}}/categorias/{{cat.response.body.$.id}}
+
+### 14. La baja no libera el nombre único (409)
+POST {{baseUrl}}/categorias
+Content-Type: application/json
+
+{
+  "nombre": "{{cat.response.body.$.nombre}}"
+}
+
+### 15. Crear categoría sin sesión (401)
+# @no-cookie-jar
+POST {{baseUrl}}/categorias
+Content-Type: application/json
+
+{
+  "nombre": "Sin sesión"
+}
+
+
+### ---------------- PRODUCTOS ----------------
+
+### 16. Listado público paginado: {total, items}, limit 20 por defecto (200)
+# @no-cookie-jar
+GET {{baseUrl}}/productos
+
+### 17. Paginación: segunda página de 5 (200)
+GET {{baseUrl}}/productos?skip=5&limit=5
+
+### 18. Búsqueda por nombre sin distinguir mayúsculas (200)
+GET {{baseUrl}}/productos?search=PIZZA
+
+### 19. Filtro por categoría y disponibilidad (200)
+GET {{baseUrl}}/productos?categoria_id=1&disponible=true
+
+### 20. Error: limit mayor que 100 (422)
+GET {{baseUrl}}/productos?limit=101
+
+### 21. Detalle de producto con su categoría (200)
+GET {{baseUrl}}/productos/1
+
+### 22. Detalle de producto inexistente (404)
+GET {{baseUrl}}/productos/99999
+
+### 23. Crear producto (201)
+# @name prod
+POST {{baseUrl}}/productos
+Content-Type: application/json
+
+{
+  "nombre": "Lomito completo",
+  "descripcion": "Lomo, jamón, queso, huevo y lechuga",
+  "precio_base": 12500,
+  "imagen_url": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600",
+  "stock": 10,
+  "disponible": true,
+  "categoria_id": 1
+}
+
+### 24. Error: categoría inexistente (404)
+POST {{baseUrl}}/productos
+Content-Type: application/json
+
+{
+  "nombre": "Sin categoría",
+  "precio_base": 100,
+  "categoria_id": 99999
+}
+
+### 25. Error: categoría dada de baja (404)
+POST {{baseUrl}}/productos
+Content-Type: application/json
+
+{
+  "nombre": "Categoría de baja",
+  "precio_base": 100,
+  "categoria_id": {{cat.response.body.$.id}}
+}
+
+### 26. Error: precio y stock negativos (422)
+POST {{baseUrl}}/productos
+Content-Type: application/json
+
+{
+  "nombre": "Negativo",
+  "precio_base": -1,
+  "stock": -5,
+  "categoria_id": 1
+}
+
+### 27. PUT parcial: solo el precio (200)
+PUT {{baseUrl}}/productos/{{prod.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "precio_base": 13000
+}
+
+### 28. Error: PUT con una categoría inexistente (404)
+PUT {{baseUrl}}/productos/{{prod.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "categoria_id": 99999
+}
+
+### 29. PATCH de stock y disponibilidad (200)
+PATCH {{baseUrl}}/productos/{{prod.response.body.$.id}}/stock
+Content-Type: application/json
+
+{
+  "stock": 50,
+  "disponible": false
+}
+
+### 30. Error: PATCH con stock negativo (422)
+PATCH {{baseUrl}}/productos/{{prod.response.body.$.id}}/stock
+Content-Type: application/json
+
+{
+  "stock": -1
+}
+
+### 31. Filtro disponible=false: aparece el producto pausado (200)
+GET {{baseUrl}}/productos?disponible=false
+
+### 32. Baja lógica del producto (204)
+DELETE {{baseUrl}}/productos/{{prod.response.body.$.id}}
+
+### 33. Producto dado de baja: detalle (404)
+GET {{baseUrl}}/productos/{{prod.response.body.$.id}}
+
+### 34. Producto dado de baja: PUT (404)
+PUT {{baseUrl}}/productos/{{prod.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "precio_base": 1
+}
+
+### 35. Producto dado de baja: PATCH de stock (404)
+PATCH {{baseUrl}}/productos/{{prod.response.body.$.id}}/stock
+Content-Type: application/json
+
+{
+  "stock": 1
+}
+
+### 36. Producto dado de baja: DELETE (404)
+DELETE {{baseUrl}}/productos/{{prod.response.body.$.id}}
+
+### 37. Login del cliente (200)
+POST {{baseUrl}}/auth/token
+Content-Type: application/x-www-form-urlencoded
+
+username=cliente&password=Cliente1234!
+
+### 38. Un user no puede crear productos (403)
+POST {{baseUrl}}/productos
+Content-Type: application/json
+
+{
+  "nombre": "Intento",
+  "precio_base": 1,
+  "categoria_id": 1
+}
+
+### 39. Un user no puede borrar categorías (403)
+DELETE {{baseUrl}}/categorias/1
+
+### 40. Logout (200)
+POST {{baseUrl}}/auth/logout

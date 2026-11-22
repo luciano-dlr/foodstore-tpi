@@ -1,0 +1,144 @@
+@baseUrl = http://localhost:8000/api/v1
+
+### ==========================================================
+### TPI Food Store · Auth y usuarios
+### Requiere una base recién cargada con "python -m app.db.seed":
+###   admin / Admin1234!       → admin
+###   cliente / Cliente1234!   → user
+### REST Client guarda la cookie access_token del login y la envía en las
+### peticiones siguientes (como el navegador). "# @no-cookie-jar" hace la
+### petición sin cookie. Entre paréntesis, el status esperado.
+### Orden sugerido: auth.http → catalogo.http → pedidos.http
+### ==========================================================
+
+
+### 1. Registro público: crea un usuario con rol user (201)
+# @name registro
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "username": "ana{{$randomInt 1000 999999}}",
+  "full_name": "Ana García",
+  "email": "ana{{$randomInt 1000 999999}}@example.com",
+  "password": "Ana12345!"
+}
+
+### 2. Error: username ya registrado (409)
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "username": "cliente",
+  "full_name": "Otro Cliente",
+  "email": "otro@example.com",
+  "password": "OtraClave123"
+}
+
+### 3. Error: email ya registrado (409)
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "username": "otro_admin",
+  "full_name": "Otro Admin",
+  "email": "admin@foodstore.com",
+  "password": "OtraClave123"
+}
+
+### 4. Error: email inválido y password de menos de 8 caracteres (422)
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "username": "malo",
+  "full_name": "Datos Malos",
+  "email": "no-es-un-email",
+  "password": "123"
+}
+
+### 5. Login con contraseña incorrecta (401)
+POST {{baseUrl}}/auth/token
+Content-Type: application/x-www-form-urlencoded
+
+username=cliente&password=incorrecta
+
+### 6. Login con usuario inexistente (401)
+POST {{baseUrl}}/auth/token
+Content-Type: application/x-www-form-urlencoded
+
+username=noexiste&password=Cualquiera123
+
+### 7. /me sin cookie (401)
+# @no-cookie-jar
+GET {{baseUrl}}/auth/me
+
+### 8. Login del cliente: el JWT llega en la cookie HttpOnly, no en el cuerpo (200)
+POST {{baseUrl}}/auth/token
+Content-Type: application/x-www-form-urlencoded
+
+username=cliente&password=Cliente1234!
+
+### 9. Perfil del cliente: rol user, sin hashed_password (200)
+GET {{baseUrl}}/auth/me
+
+### 10. Un user no puede listar usuarios (403)
+GET {{baseUrl}}/admin/usuarios
+
+### 11. Login del admin (200)
+POST {{baseUrl}}/auth/token
+Content-Type: application/x-www-form-urlencoded
+
+username=admin&password=Admin1234!
+
+### 12. Perfil del admin (200)
+# @name yo
+GET {{baseUrl}}/auth/me
+
+### 13. Listado de usuarios, incluidos los desactivados (200)
+GET {{baseUrl}}/admin/usuarios
+
+### 14. Desactivar al usuario registrado en 1 (200)
+POST {{baseUrl}}/admin/usuarios/{{registro.response.body.$.id}}/desactivar
+
+### 15. Desactivar de nuevo: idempotente (200)
+POST {{baseUrl}}/admin/usuarios/{{registro.response.body.$.id}}/desactivar
+
+### 16. Login de una cuenta desactivada (400)
+# @no-cookie-jar
+POST {{baseUrl}}/auth/token
+Content-Type: application/x-www-form-urlencoded
+
+username={{registro.response.body.$.username}}&password=Ana12345!
+
+### 17. El admin no puede desactivarse a sí mismo (400)
+POST {{baseUrl}}/admin/usuarios/{{yo.response.body.$.id}}/desactivar
+
+### 18. Desactivar un usuario inexistente (404)
+POST {{baseUrl}}/admin/usuarios/99999/desactivar
+
+### 19. Activar un usuario inexistente (404)
+POST {{baseUrl}}/admin/usuarios/99999/activar
+
+### 20. Activar al usuario registrado (200)
+POST {{baseUrl}}/admin/usuarios/{{registro.response.body.$.id}}/activar
+
+### 21. Activar de nuevo: idempotente (200)
+POST {{baseUrl}}/admin/usuarios/{{registro.response.body.$.id}}/activar
+
+### 22. Login del usuario reactivado (200)
+POST {{baseUrl}}/auth/token
+Content-Type: application/x-www-form-urlencoded
+
+username={{registro.response.body.$.username}}&password=Ana12345!
+
+### 23. Logout: la respuesta borra la cookie (200)
+POST {{baseUrl}}/auth/logout
+
+### 24. Después del logout, /me responde 401 (401)
+GET {{baseUrl}}/auth/me
+
+### 25. Token adulterado en la cookie (401)
+# @no-cookie-jar
+GET {{baseUrl}}/auth/me
+Cookie: access_token=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZG1pbiJ9.firma-falsa

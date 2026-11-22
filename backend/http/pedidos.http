@@ -1,0 +1,340 @@
+@baseUrl = http://localhost:8000/api/v1
+
+### ==========================================================
+### TPI Food Store · Pedidos y reglas de negocio (RN-01 a RN-06)
+### Crea sus propios productos de prueba para verificar el stock:
+###   A: stock 10, $1000 · B: stock 2, $2500 · C: no disponible · D: dado de baja
+### Mirar el campo "stock" en las respuestas marcadas con [STOCK].
+### ==========================================================
+
+### 1. Login del admin (200)
+POST {{baseUrl}}/auth/token
+Content-Type: application/x-www-form-urlencoded
+
+username=admin&password=Admin1234!
+
+### 2. Producto A: stock 10, precio 1000 (201)
+# @name pa
+POST {{baseUrl}}/productos
+Content-Type: application/json
+
+{ "nombre": "Prueba A {{$randomInt 1000 999999}}", "precio_base": 1000, "stock": 10, "categoria_id": 1 }
+
+### 3. Producto B: stock 2, precio 2500 (201)
+# @name pb
+POST {{baseUrl}}/productos
+Content-Type: application/json
+
+{ "nombre": "Prueba B {{$randomInt 1000 999999}}", "precio_base": 2500, "stock": 2, "categoria_id": 1 }
+
+### 4. Producto C: no disponible (201)
+# @name pc
+POST {{baseUrl}}/productos
+Content-Type: application/json
+
+{ "nombre": "Prueba C {{$randomInt 1000 999999}}", "precio_base": 500, "stock": 5, "disponible": false, "categoria_id": 1 }
+
+### 5. Producto D (201)
+# @name pd
+POST {{baseUrl}}/productos
+Content-Type: application/json
+
+{ "nombre": "Prueba D {{$randomInt 1000 999999}}", "precio_base": 500, "stock": 5, "categoria_id": 1 }
+
+### 6. Baja lógica del producto D (204)
+DELETE {{baseUrl}}/productos/{{pd.response.body.$.id}}
+
+### 7. Login del cliente (200)
+POST {{baseUrl}}/auth/token
+Content-Type: application/x-www-form-urlencoded
+
+username=cliente&password=Cliente1234!
+
+
+### ---------------- RN-01 · CREAR PEDIDO ----------------
+
+### 8. Pedido A x3 + B x1: PENDIENTE, copia nombre y precio, total 5500 (201)
+# @name ped1
+POST {{baseUrl}}/pedidos
+Content-Type: application/json
+
+{
+  "items": [
+    { "producto_id": {{pa.response.body.$.id}}, "cantidad": 3 },
+    { "producto_id": {{pb.response.body.$.id}}, "cantidad": 1 }
+  ],
+  "forma_pago": "EFECTIVO",
+  "direccion_entrega": "San Martín 1234, Mendoza",
+  "notas": "Tocar timbre"
+}
+
+### 9. [STOCK] A bajó de 10 a 7 (200)
+GET {{baseUrl}}/productos/{{pa.response.body.$.id}}
+
+### 10. Error: producto repetido entre los ítems (400)
+POST {{baseUrl}}/pedidos
+Content-Type: application/json
+
+{
+  "items": [
+    { "producto_id": {{pa.response.body.$.id}}, "cantidad": 1 },
+    { "producto_id": {{pa.response.body.$.id}}, "cantidad": 2 }
+  ],
+  "forma_pago": "EFECTIVO",
+  "direccion_entrega": "San Martín 1234"
+}
+
+### 11. Error: A x1 OK pero B x5 sin stock → rollback de TODO el pedido (400)
+POST {{baseUrl}}/pedidos
+Content-Type: application/json
+
+{
+  "items": [
+    { "producto_id": {{pa.response.body.$.id}}, "cantidad": 1 },
+    { "producto_id": {{pb.response.body.$.id}}, "cantidad": 5 }
+  ],
+  "forma_pago": "TRANSFERENCIA",
+  "direccion_entrega": "San Martín 1234"
+}
+
+### 12. [STOCK] A sigue en 7: el descuento del ítem anterior no se persistió (200)
+GET {{baseUrl}}/productos/{{pa.response.body.$.id}}
+
+### 13. Error: producto no disponible (400)
+POST {{baseUrl}}/pedidos
+Content-Type: application/json
+
+{
+  "items": [{ "producto_id": {{pc.response.body.$.id}}, "cantidad": 1 }],
+  "forma_pago": "EFECTIVO",
+  "direccion_entrega": "San Martín 1234"
+}
+
+### 14. Error: producto dado de baja (404)
+POST {{baseUrl}}/pedidos
+Content-Type: application/json
+
+{
+  "items": [{ "producto_id": {{pd.response.body.$.id}}, "cantidad": 1 }],
+  "forma_pago": "EFECTIVO",
+  "direccion_entrega": "San Martín 1234"
+}
+
+### 15. Error: producto inexistente (404)
+POST {{baseUrl}}/pedidos
+Content-Type: application/json
+
+{
+  "items": [{ "producto_id": 99999, "cantidad": 1 }],
+  "forma_pago": "EFECTIVO",
+  "direccion_entrega": "San Martín 1234"
+}
+
+### 16. RN-06 / schema: sin ítems (422)
+POST {{baseUrl}}/pedidos
+Content-Type: application/json
+
+{ "items": [], "forma_pago": "EFECTIVO", "direccion_entrega": "San Martín 1234" }
+
+### 17. RN-06: forma de pago inválida (422)
+POST {{baseUrl}}/pedidos
+Content-Type: application/json
+
+{
+  "items": [{ "producto_id": {{pa.response.body.$.id}}, "cantidad": 1 }],
+  "forma_pago": "TARJETA",
+  "direccion_entrega": "San Martín 1234"
+}
+
+### 18. RN-06: dirección de menos de 5 caracteres y cantidad 0 (422)
+POST {{baseUrl}}/pedidos
+Content-Type: application/json
+
+{
+  "items": [{ "producto_id": {{pa.response.body.$.id}}, "cantidad": 0 }],
+  "forma_pago": "EFECTIVO",
+  "direccion_entrega": "abc"
+}
+
+### 19. Crear pedido sin sesión (401)
+# @no-cookie-jar
+POST {{baseUrl}}/pedidos
+Content-Type: application/json
+
+{
+  "items": [{ "producto_id": {{pa.response.body.$.id}}, "cantidad": 1 }],
+  "forma_pago": "EFECTIVO",
+  "direccion_entrega": "San Martín 1234"
+}
+
+
+### ---------------- LISTADO, DETALLE Y PERMISOS DEL CLIENTE ----------------
+
+### 20. Mis pedidos: {total, items}, solo los propios (200)
+GET {{baseUrl}}/pedidos
+
+### 21. Mis pedidos filtrados por estado (200)
+GET {{baseUrl}}/pedidos?estado=PENDIENTE&skip=0&limit=10
+
+### 22. Detalle de un pedido propio con sus líneas (200)
+GET {{baseUrl}}/pedidos/{{ped1.response.body.$.id}}
+
+### 23. Pedido inexistente (404)
+GET {{baseUrl}}/pedidos/99999
+
+### 24. Un user no ve el resumen (403)
+GET {{baseUrl}}/pedidos/resumen
+
+### 25. Un user no cambia estados (403)
+PATCH {{baseUrl}}/pedidos/{{ped1.response.body.$.id}}/estado
+Content-Type: application/json
+
+{ "estado": "EN_PREPARACION" }
+
+
+### ---------------- RN-03 / RN-04 · CANCELACIÓN DEL DUEÑO ----------------
+
+### 26. Pedido A x2 para cancelar (201)
+# @name ped2
+POST {{baseUrl}}/pedidos
+Content-Type: application/json
+
+{
+  "items": [{ "producto_id": {{pa.response.body.$.id}}, "cantidad": 2 }],
+  "forma_pago": "TRANSFERENCIA",
+  "direccion_entrega": "Belgrano 450, Godoy Cruz"
+}
+
+### 27. [STOCK] A bajó de 7 a 5 (200)
+GET {{baseUrl}}/productos/{{pa.response.body.$.id}}
+
+### 28. El dueño cancela su pedido PENDIENTE (200)
+PATCH {{baseUrl}}/pedidos/{{ped2.response.body.$.id}}/cancelar
+
+### 29. [STOCK] A volvió a 7: stock restituido en la misma transacción (200)
+GET {{baseUrl}}/productos/{{pa.response.body.$.id}}
+
+### 30. Error: cancelar un pedido que ya no está en PENDIENTE (400)
+PATCH {{baseUrl}}/pedidos/{{ped2.response.body.$.id}}/cancelar
+
+### 31. Cancelar un pedido inexistente (404)
+PATCH {{baseUrl}}/pedidos/99999/cancelar
+
+
+### ---------------- RN-02 · MÁQUINA DE ESTADOS (ADMIN) ----------------
+
+### 32. Login del admin (200)
+POST {{baseUrl}}/auth/token
+Content-Type: application/x-www-form-urlencoded
+
+username=admin&password=Admin1234!
+
+### 33. El admin también puede comprar: B x1 (201)
+# @name ped3
+POST {{baseUrl}}/pedidos
+Content-Type: application/json
+
+{
+  "items": [{ "producto_id": {{pb.response.body.$.id}}, "cantidad": 1 }],
+  "forma_pago": "EFECTIVO",
+  "direccion_entrega": "Oficina central 100"
+}
+
+### 34. [STOCK] B quedó en 0 (2 - 1 del pedido 1 - 1 de este) (200)
+GET {{baseUrl}}/productos/{{pb.response.body.$.id}}
+
+### 35. El admin ve todos los pedidos (200)
+GET {{baseUrl}}/pedidos
+
+### 36. El admin filtra por estado (200)
+GET {{baseUrl}}/pedidos?estado=CANCELADO
+
+### 37. El admin ve el detalle de un pedido ajeno (200)
+GET {{baseUrl}}/pedidos/{{ped1.response.body.$.id}}
+
+### 38. /cancelar es solo del dueño: el admin con un pedido ajeno (403)
+PATCH {{baseUrl}}/pedidos/{{ped1.response.body.$.id}}/cancelar
+
+### 39. Transición inválida PENDIENTE → ENTREGADO (400)
+PATCH {{baseUrl}}/pedidos/{{ped1.response.body.$.id}}/estado
+Content-Type: application/json
+
+{ "estado": "ENTREGADO" }
+
+### 40. PENDIENTE → EN_PREPARACION (200)
+PATCH {{baseUrl}}/pedidos/{{ped1.response.body.$.id}}/estado
+Content-Type: application/json
+
+{ "estado": "EN_PREPARACION" }
+
+### 41. Transición inválida EN_PREPARACION → PENDIENTE (400)
+PATCH {{baseUrl}}/pedidos/{{ped1.response.body.$.id}}/estado
+Content-Type: application/json
+
+{ "estado": "PENDIENTE" }
+
+### 42. Estado que no existe (422)
+PATCH {{baseUrl}}/pedidos/{{ped1.response.body.$.id}}/estado
+Content-Type: application/json
+
+{ "estado": "EN_CAMINO" }
+
+### 43. EN_PREPARACION → ENTREGADO (200)
+PATCH {{baseUrl}}/pedidos/{{ped1.response.body.$.id}}/estado
+Content-Type: application/json
+
+{ "estado": "ENTREGADO" }
+
+### 44. ENTREGADO es terminal: no se puede cancelar (400)
+PATCH {{baseUrl}}/pedidos/{{ped1.response.body.$.id}}/estado
+Content-Type: application/json
+
+{ "estado": "CANCELADO" }
+
+### 45. Pedido 3: PENDIENTE → EN_PREPARACION (200)
+PATCH {{baseUrl}}/pedidos/{{ped3.response.body.$.id}}/estado
+Content-Type: application/json
+
+{ "estado": "EN_PREPARACION" }
+
+### 46. El admin cancela desde EN_PREPARACION (200)
+PATCH {{baseUrl}}/pedidos/{{ped3.response.body.$.id}}/estado
+Content-Type: application/json
+
+{ "estado": "CANCELADO" }
+
+### 47. [STOCK] B volvió a 1 (200)
+GET {{baseUrl}}/productos/{{pb.response.body.$.id}}
+
+### 48. CANCELADO es terminal (400)
+PATCH {{baseUrl}}/pedidos/{{ped3.response.body.$.id}}/estado
+Content-Type: application/json
+
+{ "estado": "EN_PREPARACION" }
+
+### 49. Cambiar estado de un pedido inexistente (404)
+PATCH {{baseUrl}}/pedidos/99999/estado
+Content-Type: application/json
+
+{ "estado": "CANCELADO" }
+
+### 50. Resumen del panel: conteos por estado, pedidos de hoy e ingresos de ENTREGADO (200)
+GET {{baseUrl}}/pedidos/resumen
+
+
+### ---------------- RN-04 · PEDIDOS AJENOS ----------------
+
+### 51. Login del cliente (200)
+POST {{baseUrl}}/auth/token
+Content-Type: application/x-www-form-urlencoded
+
+username=cliente&password=Cliente1234!
+
+### 52. El cliente no ve un pedido ajeno (403)
+GET {{baseUrl}}/pedidos/{{ped3.response.body.$.id}}
+
+### 53. El cliente no cancela un pedido ajeno (403)
+PATCH {{baseUrl}}/pedidos/{{ped3.response.body.$.id}}/cancelar
+
+### 54. Logout (200)
+POST {{baseUrl}}/auth/logout
