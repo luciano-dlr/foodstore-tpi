@@ -6,7 +6,7 @@
 | | |
 |---|---|
 | Repositorio | https://github.com/luciano-dlr/foodstore-tpi |
-| Video de demostración | _(link pendiente)_ |
+| Video de demostración | https://www.youtube.com/watch?v=6q8HE3CvFAw |
 
 Aplicación web para un negocio de comidas. Los clientes se registran, recorren el catálogo, arman un carrito y confirman un pedido con dirección de entrega y forma de pago (efectivo o transferencia). El administrador gestiona categorías, productos, stock, pedidos y usuarios, y ve un resumen del negocio.
 
